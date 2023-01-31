@@ -5,6 +5,7 @@ class FlutterMentions extends StatefulWidget {
     required this.mentions,
     Key? key,
     this.defaultText,
+    this.defaultMentions = const [],
     this.suggestionPosition = SuggestionPosition.Bottom,
     this.suggestionListHeight = 300.0,
     this.onMarkupChanged,
@@ -56,6 +57,9 @@ class FlutterMentions extends StatefulWidget {
 
   /// default text for the Mention Input.
   final String? defaultText;
+
+  /// default text for the Mention Input.
+  final List<Map<String, dynamic>> defaultMentions;
 
   /// Triggers when the suggestion list visibility changed.
   final Function(bool)? onSuggestionVisibleChanged;
@@ -269,27 +273,38 @@ class FlutterMentionsState extends State<FlutterMentions> {
       }
 
       element.data.forEach(
-        (e) => data["${element.trigger}${e['display']}"] = e['style'] != null
+            (e) =>
+        data["${element.trigger}${e['display']}"] = e['style'] != null
             ? Annotation(
-                style: e['style'],
-                id: e['id'],
-                display: e['display'],
-                trigger: element.trigger,
-                disableMarkup: element.disableMarkup,
-                markupBuilder: element.markupBuilder,
-              )
+          style: e['style'],
+          id: e['id'],
+          display: e['display'],
+          trigger: element.trigger,
+          disableMarkup: element.disableMarkup,
+          markupBuilder: element.markupBuilder,
+        )
             : Annotation(
-                style: element.style,
-                id: e['id'],
-                display: e['display'],
-                trigger: element.trigger,
-                disableMarkup: element.disableMarkup,
-                markupBuilder: element.markupBuilder,
-              ),
+          style: element.style,
+          id: e['id'],
+          display: e['display'],
+          trigger: element.trigger,
+          disableMarkup: element.disableMarkup,
+          markupBuilder: element.markupBuilder,
+        ),
       );
     });
 
     return data;
+  }
+
+  void replaceMarkdownWithPlaintext(Map<String, dynamic> value) {
+    String plainText = controller!.value.text;
+
+    plainText =
+        plainText.replaceFirst(RegExp(r'(@\[.*?\])'), '@' + value['display']);
+
+    // find the text by range and replace with the new value.
+    controller!.text = plainText;
   }
 
   void addMention(Map<String, dynamic> value, [Mention? list]) {
@@ -306,7 +321,9 @@ class FlutterMentionsState extends State<FlutterMentions> {
     controller!.text = controller!.value.text.replaceRange(
       selectedMention.start,
       selectedMention.end,
-      "${_list.trigger}${value['display']}${widget.appendSpaceOnAdd ? ' ' : ''}",
+      "${_list.trigger}${value['display']}${widget.appendSpaceOnAdd
+          ? ' '
+          : ''}",
     );
 
     if (widget.onMentionAdd != null) widget.onMentionAdd!(value);
@@ -376,14 +393,19 @@ class FlutterMentionsState extends State<FlutterMentions> {
 
     controller = AnnotationEditingController(data);
 
-    if (widget.defaultText != null) {
-      controller!.text = widget.defaultText!;
-    }
-
     // setup a listener to figure out which suggestions to show based on the trigger
     controller!.addListener(suggestionListerner);
 
     controller!.addListener(inputListeners);
+
+    if (widget.defaultText != null) {
+      controller!.text = widget.defaultText!;
+      for (int i = 0; i < widget.defaultMentions.length; i++) {
+        if (widget.onMentionAdd != null)
+          widget.onMentionAdd!(widget.defaultMentions[i]);
+        replaceMarkdownWithPlaintext(widget.defaultMentions[i]);
+      }
+    }
 
     super.initState();
   }
@@ -424,22 +446,22 @@ class FlutterMentionsState extends State<FlutterMentions> {
           builder: (BuildContext context, bool show, Widget? child) {
             return show && !widget.hideSuggestionList
                 ? OptionList(
-                    suggestionListHeight: widget.suggestionListHeight,
-                    suggestionBuilder: list.suggestionBuilder,
-                    suggestionListDecoration: widget.suggestionListDecoration,
-                    data: list.data.where((element) {
-                      final ele = element['display'].toLowerCase();
-                      final str = _selectedMention!.str
-                          .toLowerCase()
-                          .replaceAll(RegExp(_pattern), '');
+              suggestionListHeight: widget.suggestionListHeight,
+              suggestionBuilder: list.suggestionBuilder,
+              suggestionListDecoration: widget.suggestionListDecoration,
+              data: list.data.where((element) {
+                final ele = element['display'].toLowerCase();
+                final str = _selectedMention!.str
+                    .toLowerCase()
+                    .replaceAll(RegExp(_pattern), '');
 
-                      return ele == str ? false : ele.contains(str);
-                    }).toList(),
-                    onTap: (value) {
-                      addMention(value, list);
-                      showSuggestions.value = false;
-                    },
-                  )
+                return ele == str ? false : ele.contains(str);
+              }).toList(),
+              onTap: (value) {
+                addMention(value, list);
+                showSuggestions.value = false;
+              },
+            )
                 : Container();
           },
         ),
